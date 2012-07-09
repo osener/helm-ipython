@@ -1,14 +1,11 @@
 ;;; helm-ipython.el --- python completion using ipython and helm. 
-;; 
+
+;; Copyright (C) <Thierry Volpiatto>thierry.volpiatto@gmail.com
+
 ;; Author: Thierry Volpiatto
-;; Maintainer: Thierry Volpiatto
-;; 
-;; Created: sam. juil. 25 18:48:31 2009 (+0200)
-;; Version: 
-;; X-URL: http://mercurial.intuxication.org/hg/helmipython
+
 ;; Keywords: ipython, python, completion. 
-;; Compatibility: 
-;; 
+
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
 ;; published by the Free Software Foundation; either version 3, or
@@ -24,100 +21,23 @@
 ;; the Free Software Foundation, Inc., 51 Franklin Street, Fifth
 ;; Floor, Boston, MA 02110-1301, USA.
 ;; 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; 
-;; 
-;;; Commentary: 
-;;  ==========
-;;
-;; Tested on emacs23.1 with python2.6, ipython-9.1 and python-mode.el.
-;; This file fix also normal completion (tab without helm) in the ipython-shell.
-;; This file reuse some code of ipython.el.
-;;
-;;  Dependencies:
-;;  ============
-;;
-;;  ipython (http://ipython.scipy.org/), ipython.el, python-mode.el.
-;;  It's better to have rlcompleter2 (http://codespeak.net/rlcompleter2/) 
-;;  Note that to use rlcompleter2, you have to add these lines in your
-;;  your ~/.ipython/ipy_user_conf.py
-;;
-;;     import rlcompleter2
-;;     rlcompleter2.setup()
-;;
-;;
-;;  Install: 
-;;  =======
-;;
-;; Setup helm-ipython:
-;; Put this file in your load path.
-;; Add to .emacs:
-;;
-;; (require 'helm-ipython)
-;; (define-key py-mode-map (kbd "M-<tab>") 'helm-ipython-complete)
-;; (define-key py-shell-map (kbd "M-<tab>") 'helm-ipython-complete)
-;; (define-key py-mode-map (kbd "C-c M") 'helm-ipython-import-modules-from-buffer)
-;;
-;;  Usage: 
-;;  =====
-;; 1) From your *.py file, start ipython interpreter with C-c !
-;; 2) Import module(s) you need for completion from interpreter.
-;;    e.g "import os"
-;;    You can also import all import entries of your current *.py file
-;;    with `helm-ipython-import-modules-from-buffer'.
-;;    Note that `py-execute-buffer' (C-c C-c) will load also all modules
-;;    of your .py file.
-;; 3) Use M-x helm-ipython-complete or M-<tab> to have completion.
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
- 
+
+;; Commentary:
+;; Works only in Emacs-24.2
+
 ;;; Code:
 
-;; <2009-07-25 Sam. 18:03>
-
 (eval-when-compile (require 'cl))
-(require 'ipython)
+(require 'python)
 (require 'helm-elisp) ; For `with-helm-show-completion'
 
-;; Fix some bugs in ipython.el:
-(define-key py-shell-map (kbd "\t") 'ipython-complete)
-(setq ipython-completion-command-string "print(';'.join(__IP.Completer.all_completions('%s')))\n")
-
-(defadvice ipython-shell-hook (after unset-completion-key () activate)
-  (define-key py-mode-map (kbd "M-<tab>") 'helm-ipython-complete))
-
-;; Modify original `ipython-complete' to fit with helm.
 (defun helm-ipython-completion-list (pattern)
-  "Try to complete the python symbol before point.
-Only knows about the stuff in the current *Python* session.
-Return a completion list according to `pattern'."
-  (interactive)
-  (let* ((ugly-return                       nil)
-         (sep                               ";")
-         (ipy-shell-proc                    (get-buffer-process (current-buffer)))
-         (loc-py-buff-proc                  (get-process py-which-bufname))
-         (python-process                    (or ipy-shell-proc loc-py-buff-proc)) 
-         (cmd-args                          (format ipython-completion-command-string pattern))
-         (completions                       nil)
-         (completion-table                  nil)
-         ;; Filter out all SGR control sequences from string.
-         ;; i.e transform all shell color char from the ipython output
-         ;; in text properties understandable by lisp.
-         (comint-preoutput-filter-functions (append
-                                             comint-preoutput-filter-functions 
-                                             '(ansi-color-filter-apply
-                                               (lambda (string) 
-                                                 (setq ugly-return (concat ugly-return string))
-                                                 "")))))
-    (process-send-string python-process cmd-args)
-    (accept-process-output python-process)
-    (setq completions  ; ipython completion return string like a;b;c;d;e\n
-          (split-string (substring ugly-return 0 (helm-c-position ?\n ugly-return)) sep))
-                                        ; (message (format "DEBUG completions: %S" completions))
-    (setq completion-table (loop for str in completions
-                              collect (list str nil)))
-                                        ; (message (format "DEBUG completions: %S" completion-table))
-    (all-completions pattern completion-table)))
+  (condition-case nil
+      (with-helm-current-buffer
+        (python-shell-completion--get-completions
+         helm-pattern (python-shell-get-process)
+         python-shell-completion-string-code))
+    (error nil)))
 
 (defun helm-ipyton-default-action (elm)
   "Insert completion at point."
@@ -128,14 +48,10 @@ Return a completion list according to `pattern'."
 (defvar helm-source-ipython
   '((name . "Ipython completion")
     (candidates . (lambda ()
-                    (condition-case nil
-                        (helm-ipython-completion-list helm-pattern)
-                      (error nil))))
+                    (helm-ipython-completion-list helm-pattern)))
     (action . helm-ipyton-default-action)
     (volatile)
     (requires-pattern . 2)))
-
-;; (helm 'helm-source-ipython)
 
 (defun helm-ipython-get-initial-pattern ()
   "Get the pattern to complete from."
@@ -169,10 +85,6 @@ Return a completion list according to `pattern'."
               (throw 'break nil))))))
   (message "All imports from `%s' done" (buffer-name)))
   
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Provide
 (provide 'helm-ipython)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; helm-ipython.el ends here
