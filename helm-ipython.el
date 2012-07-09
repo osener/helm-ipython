@@ -73,16 +73,17 @@
   "Allow user to execute only the import lines of the current *.py file."
   (interactive)
   (with-current-buffer (current-buffer)
-    (goto-char (point-min))
-    (catch 'break
-      (while (not (eobp))
-        (catch 'continue
-          (if (re-search-forward "import .*" (point-max) t)
-              (progn
-                (sit-for 0.5)
-                (py-execute-region (point-at-bol) (point-at-eol))
-                (throw 'continue nil))
-              (throw 'break nil))))))
+    (save-excursion
+      (goto-char (point-min))
+      (catch 'break
+        (while (not (eobp))
+          (catch 'continue
+            (if (re-search-forward "^import .*" (point-max) t)
+                (progn
+                  (sit-for 0.5)
+                  (python-shell-send-region (point-at-bol) (point-at-eol))
+                  (throw 'continue nil))
+                (throw 'break nil)))))))
   (message "All imports from `%s' done" (buffer-name)))
   
 (provide 'helm-ipython)
