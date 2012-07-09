@@ -23,7 +23,11 @@
 ;; 
 
 ;; Commentary:
+;;
 ;; Works only in Emacs-24.2
+;; Need Ipython and rlcompleter2
+;; See Ipython installation in python.el source file
+;; or documentation.
 
 ;;; Code:
 
